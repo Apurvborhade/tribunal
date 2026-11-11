@@ -36,3 +36,23 @@ yarn-error.log*
 # Misc
 .DS_Store
 *.pem
+
+
+
+# Compiler files
+packages/contracts/cache/
+packages/contracts/out/
+
+# Ignores development broadcast logs
+packages/contracts/broadcast/
+packages/contracts/broadcast/*/31337/
+packages/contracts/broadcast/**/dry-run/
+
+# Docs
+packages/contracts/docs/
+
+# Dotenv file
+packages/contracts/.env
+
+# Foundry dependencies
+packages/contracts/lib/

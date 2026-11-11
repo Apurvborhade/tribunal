@@ -1,0 +1,4 @@
+{
+  "git.repositoryScanIgnoredFolders": ["packages/contracts/lib"],
+  "git.detectSubmodules": false
+}
