@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+pragma solidity 0.8.28;
+
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
@@ -170,7 +173,7 @@ contract EscrowVault is EIP712, ReentrancyGuard, Pausable, Ownable2Step {
 
     function markDelivered(uint256 id) external whenNotPaused nonReentrant {
         Agreement storage a = _a[id];
-        if (msg.sender != a.client) revert NotClient();
+        if (msg.sender != a.provider) revert NotProvider();
         if (a.state != State.Funded) revert BadState(a.state);
         a.state = State.Delivered;
         a.stateAt = uint48(block.timestamp);
@@ -181,21 +184,21 @@ contract EscrowVault is EIP712, ReentrancyGuard, Pausable, Ownable2Step {
         Agreement storage a = _a[id];
         if (msg.sender != a.client) revert NotClient();
         if (a.state != State.Funded && a.state != State.Delivered) revert BadState(a.state);
-        _settle(id, a.amount, 0, Reason.Released);
+        _settle(id, 0, Reason.Released);
     }
 
     function claimAfterReview(uint256 id) external nonReentrant {
         Agreement storage a = _a[id];
         if (a.state != State.Delivered) revert BadState(a.state);
         if (block.timestamp <= a.stateAt + REVIEW_WINDOW) revert TooEarly();
-        _settle(id, a.amount, 0, Reason.ReviewElapsed);
+        _settle(id, 0, Reason.ReviewElapsed);
     }
 
     function refundUndelivered(uint256 id) external nonReentrant {
         Agreement storage a = _a[id];
         if (a.state != State.Funded) revert BadState(a.state);
         if (block.timestamp <= a.deadline + DEADLINE_GRACE) revert TooEarly();
-        _settle(id, a.amount, 100, Reason.Undelivered); // 100% to client
+        _settle(id, 100, Reason.Undelivered); // 100% to client
     }
 
     function openDispute(uint256 id) external {
@@ -234,7 +237,7 @@ contract EscrowVault is EIP712, ReentrancyGuard, Pausable, Ownable2Step {
             a.ruledRound = 2;
             a.pct2 = clientPct;
             emit RulingRecorded(id, 2, clientPct, reasoningHash);
-            _settle(id, a.amount, clientPct, Reason.AppealRuling);
+            _settle(id, clientPct, Reason.AppealRuling);
         } else {
             revert BadRound();
         }
@@ -254,22 +257,26 @@ contract EscrowVault is EIP712, ReentrancyGuard, Pausable, Ownable2Step {
         Agreement storage a = _a[id];
         if (a.state != State.Ruled) revert BadState(a.state);
         if (block.timestamp <= a.stateAt + APPEAL_WINDOW) revert TooEarly();
-        _settle(id, a.amount, a.pct1, Reason.Ruling);
+        _settle(id, a.pct1, Reason.Ruling);
     }
 
     function timeoutSplit(uint256 id) external nonReentrant {
         Agreement storage a = _a[id];
         if (a.state != State.Disputed && a.state != State.Appealed) revert BadState(a.state);
         if (block.timestamp <= a.stateAt + VERDICT_TIMEOUT) revert TooEarly();
-        _settle(id, a.amount, a.state == State.Disputed ? 50 : a.pct1, Reason.Timeout);
+        _settle(id, a.state == State.Disputed ? 50 : a.pct1, Reason.Timeout);
     }
 
-    function _settle(uint256 id, uint128 toClient, uint128 toProvider, Reason reason) internal {
+    /// @dev Splits the escrowed amount: clientPct% (rounded down) to the client, the remainder to the provider.
+    function _settle(uint256 id, uint8 clientPct, Reason reason) internal {
         Agreement storage a = _a[id];
         if (a.state == State.Resolved) revert BadState(a.state);
         a.state = State.Resolved;
         a.stateAt = uint48(block.timestamp);
-        totalEscrowed -= a.amount;
+        uint256 amount = a.amount;
+        totalEscrowed -= amount;
+        uint256 toClient = (amount * clientPct) / 100;
+        uint256 toProvider = amount - toClient;
 
         emit Settled(id, toClient, toProvider, reason);
 

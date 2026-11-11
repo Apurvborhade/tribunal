@@ -59,12 +59,10 @@ contract VerdictExecutor is EIP712, Ownable2Step {
         address recoveredSigner = ECDSA.recover(digest, signature);
         if (recoveredSigner != signer) revert BadSignature();
 
-        IEscrowVault.State state;
-        uint8 ruledRound;
-        uint8 pct1;
-        uint8 pct2;
-        (state, ruledRound, pct1, pct2) = vault.rulingInfo(verdict.agreementId);
-        if (state != IEscrowVault.State.Disputed || ruledRound >= verdict.round) revert NotReady();
+        (IEscrowVault.State state,,,) = vault.rulingInfo(verdict.agreementId);
+        bool ready = (verdict.round == 1 && state == IEscrowVault.State.Disputed)
+            || (verdict.round == 2 && state == IEscrowVault.State.Appealed);
+        if (!ready) revert NotReady();
 
         vault.recordRuling(verdict.agreementId, verdict.round, verdict.clientPct, verdict.reasoningHash);
         emit VerdictSubmitted(verdict.agreementId, verdict.round, verdict.clientPct, msg.sender);

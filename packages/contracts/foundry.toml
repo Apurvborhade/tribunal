@@ -3,6 +3,23 @@ src = "src"
 out = "out"
 libs = ["lib"]
 remappings=["@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/"]
+
+[fuzz]
+runs = 1000
+
+[invariant]
+runs = 256
+depth = 100
+fail_on_revert = true
+
+# Heavier settings for CI / pre-deploy: FOUNDRY_PROFILE=deep forge test
+[profile.deep.fuzz]
+runs = 20000
+
+[profile.deep.invariant]
+runs = 1000
+depth = 250
+fail_on_revert = true
 [rpc_endpoints]
 base_sepolia = "${BASE_SEPOLIA_RPC}"
 base = "${BASE_RPC}"
